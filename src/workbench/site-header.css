@@ -1,0 +1,17 @@
+.workbench .customer-site .sample-site-header{grid-template-columns:minmax(0,1fr) 104px;gap:1.5rem;width:100%;min-width:0}
+.workbench .customer-site .sample-site-header .site-heading-copy{min-width:0}
+.workbench .customer-site .sample-site-header .site-links{display:flex;align-items:center;gap:.5rem;margin:.6rem 0 0;font-family:var(--site-ui,sans-serif);font-size:.95rem;line-height:1.5;min-width:0}
+.workbench .customer-site .sample-site-header .github-link{display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;text-decoration:none}
+.workbench .customer-site .sample-site-header .github-link img{width:22px;height:22px}
+.workbench .customer-site .sample-site-header .site-links>a:last-child{min-width:0;overflow-wrap:anywhere}
+.workbench .customer-site .sample-site-header .sample-book-link{display:block;text-align:center;font-family:var(--site-ui,sans-serif);font-size:.8rem;line-height:1.4}
+.workbench .customer-site .sample-site-header .site-cover-thumbnail{display:block;width:104px;height:auto;aspect-ratio:630/828;margin:0 0 .35rem}
+@media(max-width:600px){
+ .workbench .customer-site .sample-site-header{grid-template-columns:minmax(0,1fr) 80px;gap:.75rem}
+ .workbench .customer-site .sample-site-header .site-cover-thumbnail{width:80px}
+ .workbench .customer-site .sample-site-header .site-links{gap:.35rem;font-size:.875rem}
+}
+@media(max-width:360px){
+ .workbench .customer-site .sample-site-header{grid-template-columns:minmax(0,1fr) 72px;gap:.6rem}
+ .workbench .customer-site .sample-site-header .site-cover-thumbnail{width:72px}
+}

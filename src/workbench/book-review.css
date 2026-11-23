@@ -1,0 +1,8 @@
+.workbench .customer-site .book-navigation{margin:1rem 0 1.5rem;padding:1rem 0;border-block:1px solid var(--line);font-family:var(--site-ui,sans-serif)}
+.workbench .customer-site .book-navigation-buttons{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+.workbench .customer-site .book-navigation-buttons button{min-height:44px;padding:.6rem .8rem}
+.workbench .customer-site .book-navigation strong{white-space:nowrap}
+.workbench .customer-site .book-navigation p{margin:.65rem 0 0;text-align:center;font-family:var(--site-ui,sans-serif);font-size:.95rem}
+.workbench .customer-site .previews>div{min-width:0}
+.workbench .customer-site .previews h3{min-height:3.3em}
+@media(max-width:500px){.workbench .customer-site .book-navigation-buttons{gap:.35rem}.workbench .customer-site .book-navigation-buttons button{font-size:.8rem;padding:.55rem .45rem}.workbench .customer-site .book-navigation strong{font-size:.9rem}}
