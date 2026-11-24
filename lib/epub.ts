@@ -72,15 +72,14 @@ export function generateEpub(request:PdfRequest,onProgress:(value:number)=>void=
    const hourLabels=groups.map(group=>hourLabel(group[0],edition.clock));
    const transition=transitionLabel(slots,edition.clock).replace('; columns marked first / second','; UTC offsets identify each occurrence');
    let body=`<h1>${dateLabels[d]}</h1><p>${escape(edition.zone)}</p>${transition?`<p>${escape(transition)}</p>`:''}<nav aria-label="Hours"><ol class="hours">${hourLabels.map((hour,i)=>`<li><a href="#hour-${i}">${escape(hour)}</a></li>`).join('')}</ol></nav>`;
-   for(let pair=0;pair<groups.length;pair+=2){
-    const paired=groups.slice(pair,pair+2);
-    const length=Math.max(...paired.map(group=>group.length));
-    for(let at=0;at<length;at+=5){
+   for(let i=0;i<groups.length;i++){
+    const group=groups[i],hour=hourLabels[i];
+    for(let at=0;at<group.length;at+=10){
      body+='<div class="hour-pair">';
-     for(let column=0;column<paired.length;column++){
-      const group=paired[column],i=pair+column,hour=hourLabels[i],chunk=group.slice(at,at+5);
+     for(let column=0;column<2;column++){
+      const start=at+column*5,chunk=group.slice(start,start+5);
       if(!chunk.length)continue;
-      body+=`<section class="hour"><table${at===0?` id="hour-${i}"`:""} class="hour-chunk"><thead><tr><th colspan="2" class="chunk-heading"><span class="context">${dateLabels[d]}<br/>${escape(edition.zone)}</span><h2>${escape(hour)}</h2></th></tr><tr><th scope="col">Time</th><th scope="col">Code</th></tr></thead><tbody>`;
+      body+=`<section class="hour"><table class="hour-chunk"><thead><tr><th colspan="2" class="chunk-heading"><span class="context">${dateLabels[d]}<br/>${escape(edition.zone)}</span><h2${start===0?` id="hour-${i}"`:""}>${escape(hour)}</h2></th></tr><tr><th scope="col">Time</th><th scope="col">Code</th></tr></thead><tbody>`;
       const previewRows:EpubPreview['rows']|undefined=d===0&&i===0&&at<10?[]:undefined;
       for(const slot of chunk){
        const raw=codeAt(slot.epoch),code=raw.slice(0,3)+' '+raw.slice(3),time=timeLabel(slot);

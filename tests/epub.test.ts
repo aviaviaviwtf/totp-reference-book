@@ -33,21 +33,21 @@ for(const [date,zone,count,start] of [
  const localTime=new Intl.DateTimeFormat('en-GB',{timeZone:zone,minute:'2-digit',second:'2-digit'});
  const [year,month,day]=date.split('-').map(Number);
  const rows=[...chapter.matchAll(/<table[\s\S]*?<\/table>/g)].flatMap(([table])=>{
-  const label=table.match(/<h2>(\d{2}):00 – UTC([+-])(\d{2}):(\d{2})<\/h2>/)!;
+  const label=table.match(/<h2[^>]*>(\d{2}):00 – UTC([+-])(\d{2}):(\d{2})<\/h2>/)!;
   assert.ok(label,'each code table identifies its hour and UTC offset');
   const offset=(Number(label[3])*60+Number(label[4]))*(label[2]==='+'?1:-1);
   return [...table.matchAll(/<tr><td>(\d{2}):(\d{2})<\/td><td class="code">(\d{3}) (\d{3})<\/td><\/tr>/g)].map(row=>({
    epoch:Date.UTC(year,month-1,day,Number(label[1]),Number(row[1]),Number(row[2]))/1000-offset*60,
    time:row[1]+':'+row[2],code:row[3]+row[4],
   }));
- }).sort((a,b)=>a.epoch-b.epoch);
+ });
  assert.equal(rows.length,count);assert.equal(result.totalCodes,count);
  rows.forEach((row,i)=>{
   assert.equal(row.epoch,start+i*30);assert.equal(row.code,code(row.epoch));
   assert.equal(row.time,localTime.format(new Date(row.epoch*1000)));
  });
- if(date==='2026-11-01'){assert.match(chapter,/UTC-04:00/);assert.match(chapter,/UTC-05:00/);assert.equal((chapter.match(/<table id="hour-/g)||[]).length,25);assert.match(chapter,/<table id="hour-1"[\s\S]*?<h2>01:00 – UTC-04:00<\/h2>/);assert.match(chapter,/<table id="hour-2"[\s\S]*?<h2>01:00 – UTC-05:00<\/h2>/);}
- if(zone==='Australia/Lord_Howe')assert.match(chapter,/<table id="hour-2"[\s\S]*?<h2>01:00 – UTC\+10:30<\/h2>[\s\S]*?<td>30:00<\/td>/);
+ if(date==='2026-11-01'){assert.match(chapter,/UTC-04:00/);assert.match(chapter,/UTC-05:00/);assert.equal((chapter.match(/<h2 id="hour-/g)||[]).length,25);assert.match(chapter,/<h2 id="hour-1">01:00 – UTC-04:00<\/h2>/);assert.match(chapter,/<h2 id="hour-2">01:00 – UTC-05:00<\/h2>/);}
+ if(zone==='Australia/Lord_Howe')assert.match(chapter,/<h2 id="hour-2">01:00 – UTC\+10:30<\/h2>[\s\S]*?<td>30:00<\/td>/);
  if(date==='2026-03-08'){assert.doesNotMatch(chapter,/<h2[^>]*>02:00 /);assert.match(chapter,/skipped/);}
 });
 
