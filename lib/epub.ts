@@ -15,12 +15,29 @@ function hourLabel(slot:Slot,clock:'12'|'24'){
  const hour=clock==='12'?slot.hour%12||12:slot.hour;
  return `${String(hour).padStart(2,'0')}:00${clock==='12'?(slot.hour<12?' AM':' PM'):''} – ${slot.offset}`;
 }
-function timeLabel(slot:Slot,clock:'12'|'24'){
- return `${String(clock==='12'?slot.hour%12||12:slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')}:${String(slot.second).padStart(2,'0')}${clock==='12'?(slot.hour<12?' AM':' PM'):''}`;
+function timeLabel(slot:Slot){
+ return `${String(slot.minute).padStart(2,'0')}:${String(slot.second).padStart(2,'0')}`;
 }
 function xhtml(title:string,body:string,nested=false){return `${XML}<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en" xml:lang="en"><head><title>${escape(title)}</title><link rel="stylesheet" type="text/css" href="${nested?'../':''}book.css"/></head><body>${body}</body></html>`;}
 
-const css=`body{font-family:serif;line-height:1.4;margin:1em}h1,h2{break-after:avoid}h1{font-size:1.6em}h2{font-size:1.15em}a{color:inherit}table{border-collapse:collapse;width:100%;max-width:28em;font-family:sans-serif;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:.25em .6em;border-bottom:1px solid #aaa;white-space:nowrap}tr{break-inside:avoid}.code{font-family:monospace;font-size:1em}nav li{margin:.25em 0}.hours{columns:2}.cover{margin:0;padding:0}.cover img{width:100%;height:auto}.title{text-align:center}.title h1{margin-top:2em}.title p{margin-block:1em}section{break-before:page}`;
+const css=`
+body{font-family:serif;line-height:1.2;margin:1em}
+h1,h2{break-after:avoid}h1{font-size:1.6em}h2{font-size:1em;line-height:1.2;margin:.15em 0}
+a{color:inherit}
+.hour-pair{display:flex;flex-wrap:wrap;gap:0 2em;align-items:flex-start}
+.hour{flex:1 1 13em;min-width:0;break-inside:avoid;page-break-inside:avoid}
+.hour-chunk{break-inside:avoid;page-break-inside:avoid;margin:0 0 1.25em}
+table{border-collapse:collapse;width:100%;font-family:sans-serif;font-variant-numeric:tabular-nums}
+.chunk-heading{text-align:left;font-family:serif;white-space:normal;border:0;padding:0}
+thead{display:table-header-group}
+.context{display:block;font-size:.65em;font-weight:normal;overflow-wrap:anywhere}
+th,td{text-align:left;padding:.1em .25em;border-bottom:1px solid #aaa;white-space:nowrap}
+th[scope="col"]:first-child,td:first-child{width:3.5em}
+tr{break-inside:avoid}.code{font-family:monospace;font-size:1em}
+nav li{margin:.25em 0}.hours{columns:12em 2}
+.cover{margin:0;padding:0}.cover img{width:100%;height:auto}
+.title{text-align:center}.title h1{margin-top:2em}.title p{margin-block:1em}
+`;
 
 export function epubCover(name:string,start:string,end:string,zone:string){
  const words=name.split(/\s+/),lines:string[]=[''];
@@ -55,14 +72,28 @@ export function generateEpub(request:PdfRequest,onProgress:(value:number)=>void=
    const hourLabels=groups.map(group=>hourLabel(group[0],edition.clock));
    const transition=transitionLabel(slots,edition.clock).replace('; columns marked first / second','; UTC offsets identify each occurrence');
    let body=`<h1>${dateLabels[d]}</h1><p>${escape(edition.zone)}</p>${transition?`<p>${escape(transition)}</p>`:''}<nav aria-label="Hours"><ol class="hours">${hourLabels.map((hour,i)=>`<li><a href="#hour-${i}">${escape(hour)}</a></li>`).join('')}</ol></nav>`;
-   for(let i=0;i<groups.length;i++){
-    const group=groups[i],hour=hourLabels[i];
-    body+=`<section id="hour-${i}"><h2>${escape(hour)}</h2><table><thead><tr><th scope="col">Time</th><th scope="col">Code</th></tr></thead><tbody>`;
-    const previewRows:EpubPreview['rows']|undefined=d===0&&i===0?[]:undefined;
-    for(const slot of group){const raw=codeAt(slot.epoch),code=raw.slice(0,3)+' '+raw.slice(3),time=timeLabel(slot,edition.clock);body+=`<tr><td>${time}</td><td class="code">${code}</td></tr>`;if(previewRows&&previewRows.length<10)previewRows.push({time,code});totalCodes++;}
-    body+='</tbody></table><p><a href="../nav.xhtml">Contents</a></p></section>';
-    if(previewRows)preview={date,hour,rows:previewRows};
+   for(let pair=0;pair<groups.length;pair+=2){
+    const paired=groups.slice(pair,pair+2);
+    const length=Math.max(...paired.map(group=>group.length));
+    for(let at=0;at<length;at+=5){
+     body+='<div class="hour-pair">';
+     for(let column=0;column<paired.length;column++){
+      const group=paired[column],i=pair+column,hour=hourLabels[i],chunk=group.slice(at,at+5);
+      if(!chunk.length)continue;
+      body+=`<section class="hour"><table${at===0?` id="hour-${i}"`:""} class="hour-chunk"><thead><tr><th colspan="2" class="chunk-heading"><span class="context">${dateLabels[d]}<br/>${escape(edition.zone)}</span><h2>${escape(hour)}</h2></th></tr><tr><th scope="col">Time</th><th scope="col">Code</th></tr></thead><tbody>`;
+      const previewRows:EpubPreview['rows']|undefined=d===0&&i===0&&at<10?[]:undefined;
+      for(const slot of chunk){
+       const raw=codeAt(slot.epoch),code=raw.slice(0,3)+' '+raw.slice(3),time=timeLabel(slot);
+       body+=`<tr><td>${time}</td><td class="code">${code}</td></tr>`;
+       if(previewRows)previewRows.push({time,code});totalCodes++;
+      }
+      body+='</tbody></table></section>';
+      if(previewRows){if(preview)preview.rows.push(...previewRows);else preview={date,hour,rows:previewRows};}
+     }
+     body+='</div>';
+    }
    }
+   body+='<p><a href="../nav.xhtml">Contents</a></p>';
    add(`EPUB/days/${date}.xhtml`,xhtml(`${dateLabels[d]} – ${title}`,body,true));
    onProgress(Math.round((d+1)/dates.length*95));
   }

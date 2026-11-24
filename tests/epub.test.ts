@@ -30,17 +30,35 @@ for(const [date,zone,count,start] of [
  ['2026-07-01','Asia/Kolkata',2880,Date.UTC(2026,5,30,18,30)/1000],
 ] as const)test(`EPUB preserves every chronological code for ${zone} ${date}`,()=>{
  const result=generateEpub(request(date,zone)),chapter=entries(result.buffer)[`EPUB/days/${date}.xhtml`];
- const rows=[...chapter.matchAll(/<tr><td>([^<]+)<\/td><td class="code">(\d{3}) (\d{3})<\/td><\/tr>/g)];
+ const localTime=new Intl.DateTimeFormat('en-GB',{timeZone:zone,minute:'2-digit',second:'2-digit'});
+ const [year,month,day]=date.split('-').map(Number);
+ const rows=[...chapter.matchAll(/<table[\s\S]*?<\/table>/g)].flatMap(([table])=>{
+  const label=table.match(/<h2>(\d{2}):00 – UTC([+-])(\d{2}):(\d{2})<\/h2>/)!;
+  assert.ok(label,'each code table identifies its hour and UTC offset');
+  const offset=(Number(label[3])*60+Number(label[4]))*(label[2]==='+'?1:-1);
+  return [...table.matchAll(/<tr><td>(\d{2}):(\d{2})<\/td><td class="code">(\d{3}) (\d{3})<\/td><\/tr>/g)].map(row=>({
+   epoch:Date.UTC(year,month-1,day,Number(label[1]),Number(row[1]),Number(row[2]))/1000-offset*60,
+   time:row[1]+':'+row[2],code:row[3]+row[4],
+  }));
+ }).sort((a,b)=>a.epoch-b.epoch);
  assert.equal(rows.length,count);assert.equal(result.totalCodes,count);
- rows.forEach((row,i)=>assert.equal(row[2]+row[3],code(start+i*30)));
- if(date==='2026-11-01'){assert.match(chapter,/UTC-04:00/);assert.match(chapter,/UTC-05:00/);assert.equal((chapter.match(/<h2[^>]*>01:00 /g)||[]).length,2);}
- if(date==='2026-03-08'){assert.doesNotMatch(chapter,/<td>02:/);assert.match(chapter,/skipped/);}
+ rows.forEach((row,i)=>{
+  assert.equal(row.epoch,start+i*30);assert.equal(row.code,code(row.epoch));
+  assert.equal(row.time,localTime.format(new Date(row.epoch*1000)));
+ });
+ if(date==='2026-11-01'){assert.match(chapter,/UTC-04:00/);assert.match(chapter,/UTC-05:00/);assert.equal((chapter.match(/<table id="hour-/g)||[]).length,25);assert.match(chapter,/<table id="hour-1"[\s\S]*?<h2>01:00 – UTC-04:00<\/h2>/);assert.match(chapter,/<table id="hour-2"[\s\S]*?<h2>01:00 – UTC-05:00<\/h2>/);}
+ if(zone==='Australia/Lord_Howe')assert.match(chapter,/<table id="hour-2"[\s\S]*?<h2>01:00 – UTC\+10:30<\/h2>[\s\S]*?<td>30:00<\/td>/);
+ if(date==='2026-03-08'){assert.doesNotMatch(chapter,/<h2[^>]*>02:00 /);assert.match(chapter,/skipped/);}
 });
 
 test('clock selection changes labels, not codes, and invalid XML text is rejected',()=>{
  const a=generateEpub(request('2026-07-01','UTC','12')),b=generateEpub(request('2026-07-01','UTC','24'));
  const aText=entries(a.buffer)['EPUB/days/2026-07-01.xhtml'],bText=entries(b.buffer)['EPUB/days/2026-07-01.xhtml'];
- assert.match(aText,/12:00:00 AM/);assert.match(aText,/12:00:00 PM/);assert.match(bText,/00:00:00/);
+ assert.match(aText,/12:00 AM/);assert.match(aText,/12:00 PM/);assert.match(bText,/00:00 –/);
+ assert.doesNotMatch(aText,/<td>\d{2}:\d{2}:\d{2}/);assert.equal(a.preview.rows[0].time,'00:00');
+ const tables=[...aText.matchAll(/<table[\s\S]*?<\/table>/g)].map(m=>m[0]);
+ assert.equal(tables.length,24*24);
+ for(const table of tables){assert.match(table,/July 1, 2026/);assert.match(table,/UTC/);assert.match(table,/12:00 AM|\d{2}:00 [AP]M/);assert.equal((table.match(/class="code"/g)||[]).length,5);}
  assert.deepEqual([...aText.matchAll(/class="code">([^<]+)/g)].map(m=>m[1]),[...bText.matchAll(/class="code">([^<]+)/g)].map(m=>m[1]));
  const bad=request('2026-07-01');bad.edition.name='Title\u0001';assert.throws(()=>generateEpub(bad));
 });
