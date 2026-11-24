@@ -124,6 +124,33 @@ body:has(.workbench){margin:0}
 /* Place the work next to its instructions; the mobile flow remains vertical. */
 .workbench .customer-site .import-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:2.5rem;align-items:start}
 .workbench .customer-site .import-layout .reading-copy p:first-child{margin-top:0}
+.workbench .customer-site .platform-shortcuts h3{
+ margin:1rem 0 .375rem;
+ font:italic 600 .9375rem/1.5 var(--site-ui,sans-serif);
+}
+.workbench .customer-site .platform-shortcuts ul{
+ display:flex;
+ flex-wrap:wrap;
+ gap:.5rem;
+ list-style:none;
+ margin:0 0 1.25rem;
+ padding:0;
+}
+.workbench .customer-site .platform-shortcuts a{
+ display:inline-flex;
+ align-items:center;
+ gap:.4375rem;
+ min-height:44px;
+ padding:.4375rem .6875rem;
+ border:1px solid var(--line);
+ background:#eef1f5;
+ font-weight:600;
+ text-decoration:none;
+}
+.workbench .customer-site .platform-shortcuts a:hover{
+ border-color:var(--accent);
+ text-decoration:underline;
+}
 .workbench .customer-site .import-layout .qr-upload{margin-top:0}
 .workbench .customer-site .camera-action{width:100%;margin-top:.5rem}
 .workbench .customer-site .camera-scanner{margin-top:.75rem}

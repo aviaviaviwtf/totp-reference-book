@@ -28,7 +28,7 @@ The supported setup is TOTP with six digits and a 30-second period (SHA-1, SHA-2
 
 Everything in this repo runs in the browser, locally, and isn't cached to localStorage. Refreshing or closing the page will clear the session.
 
-Fonts, JavaScript, and the public QR illustration are bundled with the app and served locally. The code has no analytics or upload endpoint. The Instagram footer is an ordinary external link and opens only if clicked.
+Fonts, JavaScript, and the public QR illustration are bundled with the app and served locally. The code has no analytics or upload endpoint. The platform shortcuts and Instagram footer open external pages only when clicked.
 
 A note: A downloaded PDF or printed book contains usable authentication codes for its dates. Keep it private. A book stops working if the service changes or revokes its setup key.
 

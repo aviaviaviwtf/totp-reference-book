@@ -21,6 +21,7 @@
   "footer.credit": "created by @aviaviavi.wtf",
   "import.camera": "Scan QR code",
   "import.instructions": "Start the 2 factor authentication setup on the website you want this book for. You can either upload a screenshot of the QR Code, or copy the setup key into the input.",
+  "import.platformShortcuts": "Links to two factor settings for popular platforms",
   "import.key": "Setup key or otpauth link",
   "import.local": "Note: This tool is designed to be fully browser based, and doesn't store your set up key in any way. I don't even store it in local storage. If you refresh the page or close it, it will clear it.",
   "import.qr": "Upload QR screenshot",
