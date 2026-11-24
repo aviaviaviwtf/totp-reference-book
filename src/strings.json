@@ -85,5 +85,15 @@
   "app.sampleAlt": "Lorem Ipsum – TOTP Reference Book",
   "cover.front": "Cover: {{title}}",
   "action.refresh": "refresh",
-  "book.next": "Next book →"
+  "book.next": "Next book →",
+  "edition.exportFormat": "File format",
+  "epub.cancel": "Cancel EPUB(s)",
+  "epub.generate": "Create EPUB(s)",
+  "epub.review": "Review your EPUB(s)",
+  "epub.book": "Ebook",
+  "epub.download": "Download Full EPUB",
+  "epub.downloadAll": "Download all EPUBs",
+  "epub.preview": "Preview of {{count}} codes.",
+  "epub.time": "Time",
+  "error.epub": "Unable to create the EPUBs. Try again or use a different device."
 }
