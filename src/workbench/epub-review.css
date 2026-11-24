@@ -1,0 +1,11 @@
+.workbench .customer-site .export-format{margin:1.2rem 0}
+.workbench .customer-site .export-format .clock-toggle{max-width:24rem}
+.workbench .customer-site .epub-review{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,.6fr);gap:2rem;align-items:start}
+.workbench .customer-site .epub-review>*{min-width:0}
+.workbench .customer-site .epub-review h3{margin-top:0}
+.workbench .customer-site .epub-review h4{margin-bottom:.35rem}
+.workbench .customer-site .epub-review table{font-family:var(--site-ui,sans-serif);font-variant-numeric:tabular-nums}
+.workbench .customer-site .epub-review td{white-space:nowrap}
+.workbench .customer-site .epub-code{font-family:monospace;font-size:1em}
+.workbench .customer-site .epub-cover{width:100%;max-width:320px;height:auto}
+@media(max-width:650px){.workbench .customer-site .epub-review{grid-template-columns:1fr}.workbench .customer-site .epub-cover{max-width:230px}.workbench .customer-site .epub-review table{font-size:1rem}}

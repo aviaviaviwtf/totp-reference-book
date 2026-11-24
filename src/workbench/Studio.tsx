@@ -1,4 +1,7 @@
 import {preparePrintAssets} from '../print-assets';
+import {prepareEpubAssets} from '../epub-assets';
+import {epubCover,type EpubResult} from '../../lib/epub';
+import EpubReview,{type EpubBook} from './EpubReview';
 import SiteHeader from './SiteHeader';
 import BookNavigation from './BookNavigation';
 import type {PreviewView} from './PdfPreview';
@@ -27,8 +30,8 @@ export type Book={half:string;year:number;key:string;details:CoverDetails;interi
 export default function Studio(){
  useEffect(()=>{
   let stopped=false,frame=0,idle=0,timer=0;
-  const warm=()=>{if(!stopped)void preparePrintAssets().catch(()=>{});};
-  // Let the loaded page paint before warming public PDF assets for offline use.
+  const warm=()=>{if(!stopped){void preparePrintAssets().catch(()=>{});void prepareEpubAssets().catch(()=>{});}};
+  // Let the loaded page paint before warming public generation assets for offline use.
   const afterLoad=()=>{frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(()=>{
    if(typeof window.requestIdleCallback==='function')idle=window.requestIdleCallback(warm,{timeout:2000});
    else timer=window.setTimeout(warm,0);
@@ -45,11 +48,12 @@ export default function Studio(){
  const [zone,setZone]=useState(browserTimeZone),[clock,setClock]=useState<'12'|'24'>('12');
  const [camera,setCamera]=useState(false),[cameraFrame,setCameraFrame]=useState(''),[dragging,setDragging]=useState(false);
  const [uploaded,setUploaded]=useState(false),[selectedPeriods,setSelectedPeriods]=useState<string[]>([`${defaults.current.year}-${defaults.current.period}`]),[periodCount,setPeriodCount]=useState(5),[reviewIndex,setReviewIndex]=useState(0),[coverIndex,setCoverIndex]=useState(0);
- const t=(key:string)=>((strings as Record<string,string>)[key]??`[${key}]`).replaceAll('PDF(s)',selectedPeriods.length===1?'PDF':'PDFs');
+ const t=(key:string)=>((strings as Record<string,string>)[key]??`[${key}]`).replaceAll('PDF(s)',selectedPeriods.length===1?'PDF':'PDFs').replaceAll('EPUB(s)',selectedPeriods.length===1?'EPUB':'EPUBs');
  const [now,setNow]=useState(Date.now()),[copyExpires,setCopyExpires]=useState(0),[error,setError]=useState(''),[scanning,setScanning]=useState(false);
  const [qrError,setQrError]=useState('');
  const [books,setBooks]=useState<Book[]>([]),[progress,setProgress]=useState<number|null>(null),[part,setPart]=useState(1),[pngBusy,setPngBusy]=useState(false);
 
+ const [format,setFormat]=useState<'pdf'|'epub'>('pdf'),[epubBooks,setEpubBooks]=useState<EpubBook[]>([]);
  const [previewViews,setPreviewViews]=useState<Record<string,PreviewView>>({});
  const [zipBusy,setZipBusy]=useState(false),[zipUrl,setZipUrl]=useState('');
  const archiveAbort=useRef<AbortController|null>(null);
@@ -86,8 +90,9 @@ export default function Studio(){
  const issue=titleIssue(title),busy=progress!==null||scanning;
  const coverPlan=plans[coverIndex]??periods[0];
  const coverDetails={name:title,zone,start:coverPlan.start,end:coverPlan.end,pages:coverPlan.pages};
+ const epubCoverUrl=useMemo(()=>format==='epub'&&!issue?'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(epubCover(title,coverPlan.start,coverPlan.end,zone)):'',[format,issue,title,coverPlan.start,coverPlan.end,zone]);
  function go(index:number){setUnlocked(current=>Math.max(current,index));setScrollTo(index);}
- function clearBooks(){generation.current++;archiveAbort.current?.abort();setZipBusy(false);setZipUrl('');worker.current?.terminate();rejectWork.current?.(Error('Canceled'));rejectWork.current=null;worker.current=null;urls.current.forEach(URL.revokeObjectURL);urls.current=[];setBooks([]);setPreviewViews({});setProgress(null);setError('');setUnlocked(current=>Math.min(current,2));}
+ function clearBooks(){generation.current++;archiveAbort.current?.abort();setZipBusy(false);setZipUrl('');worker.current?.terminate();rejectWork.current?.(Error('Canceled'));rejectWork.current=null;worker.current=null;urls.current.forEach(URL.revokeObjectURL);urls.current=[];setBooks([]);setEpubBooks([]);setPreviewViews({});setProgress(null);setError('');setUnlocked(current=>Math.min(current,2));}
  function acceptSetup(value:string){
   // Validate the candidate before replacing the active setup or its generated files.
   parseSetup(value);const labels=setupLabels(value);
@@ -126,6 +131,10 @@ export default function Studio(){
  async function copyCode(){if(!codeAt)return;const started=Date.now(),version=scan.current;try{await navigator.clipboard.writeText(codeAt(Math.floor(started/1000)));if(version!==scan.current)return;setNow(Date.now());setCopyExpires(copiedUntil(started));setError('');}catch{if(version===scan.current)setError('error.copy');}}
  function objectUrl(blob:Blob){const url=URL.createObjectURL(blob);urls.current.push(url);return url;}
  async function generate(){
+  if(format==='epub')return generateEbooks();
+  return generatePdfs();
+ }
+ async function generatePdfs(){
   if(!config||!verified||issue||!plans.length)return;
   clearBooks();const version=++generation.current;setPart(1);setProgress(0);const result:Book[]=[];
   try{const assets=await preparePrintAssets();if(version!==generation.current)return;for(let i=0;i<plans.length;i++){
@@ -146,13 +155,41 @@ export default function Studio(){
   }catch{if(version===generation.current){urls.current.forEach(URL.revokeObjectURL);urls.current=[];setBooks([]);setError('error.generate');}}
   finally{if(version===generation.current){setProgress(null);worker.current=null;rejectWork.current=null;}}
  }
+ async function generateEbooks(){
+  if(!config||!verified||issue||!plans.length)return;
+  clearBooks();const version=++generation.current;setPart(1);setProgress(0);const result:EpubBook[]=[];
+  try{
+   const workerUrl=await prepareEpubAssets();if(version!==generation.current)return;
+   for(let i=0;i<plans.length;i++){
+    const plan=plans[i];setPart(i+1);setProgress(0);
+    const data=await new Promise<EpubResult>((resolve,reject)=>{
+     rejectWork.current=reject;const w=new Worker(workerUrl,{type:'module'});worker.current=w;
+     w.onmessage=({data})=>{
+      if(version!==generation.current)return;
+      if(data.type==='progress')setProgress(Math.min(95,data.progress));
+      if(data.type==='error'){w.terminate();reject(Error('Generation failed'));}
+      if(data.type==='done'){w.terminate();worker.current=null;rejectWork.current=null;resolve(data);}
+     };
+     w.onerror=()=>{w.terminate();reject(Error('Generation failed'));};
+     w.postMessage(bookPdfRequest({edition:{...DEFAULT_EDITION,name:title,year:plan.year,zone,clock},config,sample:false,half:plan.half,date:plan.start}));
+    });
+    if(version!==generation.current)return;
+    if(data.days!==(plan.pages-4)/2)throw Error('Date count mismatch');
+    result.push({key:plan.key,details:{name:title,zone,start:plan.start,end:plan.end,pages:plan.pages},url:objectUrl(new Blob([data.buffer],{type:'application/epub+zip'})),cover:objectUrl(new Blob([data.coverSvg],{type:'image/svg+xml'})),preview:data.preview});
+   }
+   setEpubBooks(result);setUnlocked(current=>Math.max(current,3));setScrollTo(3);
+  }catch{
+   if(version===generation.current){urls.current.forEach(URL.revokeObjectURL);urls.current=[];setEpubBooks([]);setError('error.epub');}
+  }finally{if(version===generation.current){setProgress(null);worker.current=null;rejectWork.current=null;}}
+ }
  async function png(book:Book){const version=generation.current;setPngBusy(true);try{const blob=await templatePng(book.details,false);if(version!==generation.current)return;const url=objectUrl(blob),a=document.createElement('a');a.href=url;a.download=`${volumeDownloadName(book.key,book.details.name)}-cover-template-300dpi.png`;a.click();}catch{if(version===generation.current)setError('error.template');}finally{setPngBusy(false);}}
  function savePackage(url:string){const link=document.createElement('a');link.href=url;link.download='totp-reference-books.zip';link.click();}
  async function downloadAll(){
-  if(zipBusy||!books.length)return;
+  if(zipBusy||!(format==='epub'?epubBooks.length:books.length))return;
   if(zipUrl){savePackage(zipUrl);return;}
   const version=generation.current,controller=new AbortController();archiveAbort.current=controller;setZipBusy(true);setError('');
-  try{const blob=await pdfArchive(books.flatMap(book=>(['interior','cover'] as const).map(kind=>({name:`${volumeDownloadName(book.key,book.details.name)}/${kind}.pdf`,url:book[kind]}))),fetch,controller.signal);
+  try{const files=format==='epub'?epubBooks.map(book=>({name:`${volumeDownloadName(book.key,book.details.name)}.epub`,url:book.url})):books.flatMap(book=>(['interior','cover'] as const).map(kind=>({name:`${volumeDownloadName(book.key,book.details.name)}/${kind}.pdf`,url:book[kind]})));
+   const blob=await pdfArchive(files,fetch,controller.signal);
    if(version!==generation.current)return;const url=objectUrl(blob);setZipUrl(url);
    savePackage(url);
   }catch{if(version===generation.current)setError('error.archive');}
@@ -170,9 +207,9 @@ export default function Studio(){
  {section(1,'verify.title',<><p className="reading-copy verbatim">{instructionsWithRefresh(t('verify.instructions'))}</p><div className="code-line"><div><span className="code-label">{t('verify.code')} {titleFor(uploadedLabels?.website??'',uploadedLabels?.account??'')}</span><button className={`code-button ${code&&remaining<=3?'expiring':''}`} disabled={!config} aria-label={`${t('verify.copy')}: ${code}`} onClick={()=>void copyCode()}>{code?`${code.slice(0,3)} ${code.slice(3)}`:'— — —'}</button></div><span className="countdown" aria-label={code?t('verify.seconds').replaceAll('{{number}}',String(remaining)):undefined}>{code?`${remaining}s`:'—'}</span><button className={copied?'is-copied':''} disabled={!config} onClick={()=>void copyCode()}>{t(copied?'verify.copied':'verify.copy')}</button></div>{error==='error.copy'&&<div className="manual-code-copy"><p className="field-error" role="alert">{t(error)}</p><label>{t('verify.current')}<input ref={copyFallback} readOnly value={code} aria-describedby="manual-copy-help" autoComplete="off" spellCheck={false} onFocus={e=>e.currentTarget.select()}/></label><p id="manual-copy-help">{t('error.copy')}</p></div>}<button className="primary-action" disabled={!config} onClick={()=>{setVerified(true);go(2);}}>{t('action.continue')}</button></>)}
  {section(2,'edition.title',<div className="edition-layout"><fieldset disabled={scanning} onChange={clearBooks}><label>{t('edition.cover')} *<input value={title} maxLength={240} onChange={e=>setTitle(e.target.value)} aria-describedby="title-count title-error"/></label><div id="title-count" className="character-count">{[...title].length} / 60</div><p id="title-error" className="field-error" role={issue&&title?'alert':undefined}>{issue==='length'?t('error.titleLength'):issue==='characters'?t('error.titleCharacters'):''}</p>
  <fieldset className="half-selection"><legend>{t('edition.period')} *</legend>{periods.filter((p,index)=>index<periodCount||selectedPeriods.includes(p.key)).map(p=><label className="check" key={p.key}><input type="checkbox" checked={selectedPeriods.includes(p.key)} onChange={e=>setSelectedPeriods(current=>e.target.checked?[...current,p.key]:current.filter(key=>key!==p.key))}/>{coverDate(p.start)} – {coverDate(p.end)}</label>)}{periodCount<periods.length&&<button type="button" className="text-button" onClick={()=>setPeriodCount(count=>visiblePeriodCount(count,periods.length))}>{t('edition.more')}</button>}</fieldset>
- <div className="row"><label>{t('edition.zone')} *<select value={zone} onChange={e=>setZone(e.target.value)}>{zoneList.map(z=><option key={z.value} value={z.value}>{z.label}</option>)}</select></label><fieldset className="clock-field"><legend>{t('edition.clock')} *</legend><div className="clock-toggle">{(['12','24'] as const).map(value=><label key={value}><input type="radio" name="clock-format" value={value} checked={clock===value} onChange={()=>setClock(value)}/><span>{value}h</span></label>)}</div></fieldset></div><button className="primary-action" disabled={busy||!!issue||!verified||!plans.length} onClick={()=>void generate()}>{t('edition.generate')}</button>
- {error==='error.generate'&&<p className="field-error" role="alert">{t(error)}</p>}{progress!==null&&<div role="status"><p>{t('edition.progress')}: {part}/{plans.length} ({progress}%)</p><progress value={progress} max={100}/><button className="text-button" onClick={clearBooks}>{t('edition.cancel')}</button></div>}</fieldset><aside className="edition-cover">{plans.length>1&&<div className="carousel-controls"><button aria-label={t('pdf.previous')} disabled={coverIndex===0} onClick={()=>setCoverIndex(i=>i-1)}>‹</button><span>{coverDate(coverDetails.start)} – {coverDate(coverDetails.end)}</span><button aria-label={t('pdf.next')} disabled={coverIndex===plans.length-1} onClick={()=>setCoverIndex(i=>i+1)}>›</button></div>}{plans.length>0&&unlocked>=2&&<CoverPreview t={t} details={coverDetails} errorLabel={t('pdf.error')}/>}</aside></div>)}
- {section(3,'review.title',<><p className="reading-copy">{t('review.save')}</p><p>{t('review.templateQuestion')} <button className="text-button" disabled={pngBusy||!books.length} onClick={()=>books[reviewIndex]&&void png(books[reviewIndex])}>{t('review.template')}</button>.</p>{error==='error.template'&&<p className="field-error" role="alert">{t('error.generate')}</p>}{!books.length&&<div className="previews">{(['interior','cover'] as const).map(kind=><div key={kind}><h3>{t('review.'+kind)}</h3><div className="controls"><button disabled>{t('review.download')}</button><button disabled>{t('review.open')}</button></div><div className="document-placeholder" aria-hidden="true"/></div>)}</div>}{books.length>0&&<BookNavigation t={t} items={books.map(book=>book.details)} index={reviewIndex} onChange={setReviewIndex} zone={zone} clock={clock} id="book-review-navigation" label={t('book.choose')}/>}{books.slice(reviewIndex,reviewIndex+1).map(book=><article className="volume" key={book.key}><div className="previews">{(['interior','cover'] as const).map(kind=><div key={kind}><h3>{t('review.'+kind)} | {coverDate(book.details.start)} – {coverDate(book.details.end)}</h3><div className="controls"><a href={book[kind]} download={`${volumeDownloadName(book.key,book.details.name)}-${kind}.pdf`}>{t('review.download')}</a><a href={book[kind]} target="_blank" rel="noreferrer">{t('review.open')}</a></div>{kind==='cover'?<CoverPreview t={t} details={book.details} url={book.cover} errorLabel={t('pdf.error')}/>:<PdfPreview key={book[kind]} details={book.details} view={previewViews[book.interior]} onViewChange={view=>setPreviewViews(current=>({...current,[book.interior]:view}))} url={book[kind]} label={`${t('review.'+kind)} | ${coverDate(book.details.start)} – ${coverDate(book.details.end)}`} t={t}/>}</div>)}</div></article>)}{books.length>1&&<BookNavigation t={t} items={books.map(book=>book.details)} index={reviewIndex} onChange={setReviewIndex} zone={zone} clock={clock} compact focusTargetId="book-review-navigation" label={t('book.chooseAfter')}/>}<div className="review-complete"><button disabled={zipBusy||!books.length} aria-busy={zipBusy} onClick={()=>void downloadAll()}>{t('review.downloadAll')}{zipBusy?'…':''}</button></div>{error==='error.archive'&&<p className="field-error" role="alert">{t('error.generate')}</p>}</>)}
+ <div className="row"><label>{t('edition.zone')} *<select value={zone} onChange={e=>setZone(e.target.value)}>{zoneList.map(z=><option key={z.value} value={z.value}>{z.label}</option>)}</select></label><fieldset className="clock-field"><legend>{t('edition.clock')} *</legend><div className="clock-toggle">{(['12','24'] as const).map(value=><label key={value}><input type="radio" name="clock-format" value={value} checked={clock===value} onChange={()=>setClock(value)}/><span>{value}h</span></label>)}</div></fieldset></div><fieldset className="clock-field export-format"><legend>{t('edition.exportFormat')} *</legend><div className="clock-toggle">{(['pdf','epub'] as const).map(value=><label key={value}><input type="radio" name="export-format" value={value} checked={format===value} onChange={()=>setFormat(value)}/><span>{value.toUpperCase()}</span></label>)}</div></fieldset><button className="primary-action" disabled={busy||!!issue||!verified||!plans.length} onClick={()=>void generate()}>{t(format==='epub'?'epub.generate':'edition.generate')}</button>
+ {['error.generate','error.epub'].includes(error)&&<p className="field-error" role="alert">{t(error)}</p>}{progress!==null&&<div role="status"><p>{t('edition.progress')}: {part}/{plans.length} ({progress}%)</p><progress value={progress} max={100}/><button className="text-button" onClick={clearBooks}>{t(format==='epub'?'epub.cancel':'edition.cancel')}</button></div>}</fieldset><aside className="edition-cover">{plans.length>1&&<div className="carousel-controls"><button aria-label={t('pdf.previous')} disabled={coverIndex===0} onClick={()=>setCoverIndex(i=>i-1)}>‹</button><span>{coverDate(coverDetails.start)} – {coverDate(coverDetails.end)}</span><button aria-label={t('pdf.next')} disabled={coverIndex===plans.length-1} onClick={()=>setCoverIndex(i=>i+1)}>›</button></div>}{plans.length>0&&unlocked>=2&&(format==='epub'?(epubCoverUrl?<img className="epub-cover" src={epubCoverUrl} alt={title}/>:null):<CoverPreview t={t} details={coverDetails} errorLabel={t('pdf.error')}/>)}</aside></div>)}
+ {section(3,format==='epub'?'epub.review':'review.title',format==='epub'?<><p className="reading-copy">{t('review.save')}</p><EpubReview books={epubBooks} index={reviewIndex} onChange={setReviewIndex} zone={zone} clock={clock} t={t} onDownload={()=>{}}/><div className="review-complete"><button disabled={zipBusy||!epubBooks.length} aria-busy={zipBusy} onClick={()=>void downloadAll()}>{t('epub.downloadAll')}{zipBusy?'…':''}</button></div>{error==='error.archive'&&<p className="field-error" role="alert">{t('error.epub')}</p>}</>:<><p className="reading-copy">{t('review.save')}</p><p>{t('review.templateQuestion')} <button className="text-button" disabled={pngBusy||!books.length} onClick={()=>books[reviewIndex]&&void png(books[reviewIndex])}>{t('review.template')}</button>.</p>{error==='error.template'&&<p className="field-error" role="alert">{t('error.generate')}</p>}{!books.length&&<div className="previews">{(['interior','cover'] as const).map(kind=><div key={kind}><h3>{t('review.'+kind)}</h3><div className="controls"><button disabled>{t('review.download')}</button><button disabled>{t('review.open')}</button></div><div className="document-placeholder" aria-hidden="true"/></div>)}</div>}{books.length>0&&<BookNavigation t={t} items={books.map(book=>book.details)} index={reviewIndex} onChange={setReviewIndex} zone={zone} clock={clock} id="book-review-navigation" label={t('book.choose')}/>}{books.slice(reviewIndex,reviewIndex+1).map(book=><article className="volume" key={book.key}><div className="previews">{(['interior','cover'] as const).map(kind=><div key={kind}><h3>{t('review.'+kind)} | {coverDate(book.details.start)} – {coverDate(book.details.end)}</h3><div className="controls"><a href={book[kind]} download={`${volumeDownloadName(book.key,book.details.name)}-${kind}.pdf`}>{t('review.download')}</a><a href={book[kind]} target="_blank" rel="noreferrer">{t('review.open')}</a></div>{kind==='cover'?<CoverPreview t={t} details={book.details} url={book.cover} errorLabel={t('pdf.error')}/>:<PdfPreview key={book[kind]} details={book.details} view={previewViews[book.interior]} onViewChange={view=>setPreviewViews(current=>({...current,[book.interior]:view}))} url={book[kind]} label={`${t('review.'+kind)} | ${coverDate(book.details.start)} – ${coverDate(book.details.end)}`} t={t}/>}</div>)}</div></article>)}{books.length>1&&<BookNavigation t={t} items={books.map(book=>book.details)} index={reviewIndex} onChange={setReviewIndex} zone={zone} clock={clock} compact focusTargetId="book-review-navigation" label={t('book.chooseAfter')}/>}<div className="review-complete"><button disabled={zipBusy||!books.length} aria-busy={zipBusy} onClick={()=>void downloadAll()}>{t('review.downloadAll')}{zipBusy?'…':''}</button></div>{error==='error.archive'&&<p className="field-error" role="alert">{t('error.generate')}</p>}</>)}
  <footer className="flow-footer"><a href="https://www.instagram.com/aviaviavi.wtf/" target="_blank" rel="noreferrer">{t('footer.credit')}</a></footer>
  </div></main>;
 }
